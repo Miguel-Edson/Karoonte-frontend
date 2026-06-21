@@ -1,23 +1,4 @@
-# Karoonte 🎮
-
-> O clássico Kahoot, mas no mundo físico.
-
-Este repositório contém o **Front-end** do projeto Karoonte, uma aplicação desenvolvida para interagir com um sistema embarcado que utiliza "controles" físicos para simular a experiência de um quiz interativo.
-
-## 📖 Sobre o Projeto
-
-O Karoonte foi desenvolvido como trabalho prático para a disciplina de **Sistemas em Tempo Real (STR)**. O objetivo principal é aplicar os conceitos vistos em sala de aula na integração de um sistema embarcado (hardware) com uma interface de usuário moderna e responsiva (software), garantindo a comunicação e a sincronização em tempo real das respostas dos jogadores.
-
-## 🛠️ Tecnologias Utilizadas
-
-A interface foi construída com foco em performance e componentização, utilizando:
-
-* **[Next.js](https://nextjs.org/)** (App Router)
-* **[React](https://reactjs.org/)**
-* **[TypeScript](https://www.typescriptlang.org/)**
-* **[Tailwind CSS](https://tailwindcss.com/)** para estilização
-
-*(A comunicação com os microcontroladores/sistema embarcado é feita via MQTT)*
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
 
