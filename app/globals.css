@@ -39,3 +39,36 @@ body {
   --color-black: 33, 33, 33;
   --color-white: 255, 255, 255;
 }
+:root {
+  --ilga-red: #ED2929;
+  --ilga-orange: #F76B1C;
+  --ilga-yellow: #FFBB50;
+  --ilga-green: #22B82B;
+  --ilga-blue: #008EF0;
+  --ilga-purple: #703CEE;
+  --ilga-black: #212121;
+  --ilga-white: #FFFFFF;
+}
+
+/* 2. Criando as classes de Fundo (Backgrounds) "na mão" */
+.bg-ilga-red { background-color: var(--ilga-red); }
+.bg-ilga-orange { background-color: var(--ilga-orange); }
+.bg-ilga-yellow { background-color: var(--ilga-yellow); }
+.bg-ilga-green { background-color: var(--ilga-green); }
+.bg-ilga-blue { background-color: var(--ilga-blue); }
+.bg-ilga-purple { background-color: var(--ilga-purple); }
+.bg-ilga-black { background-color: var(--ilga-black); }
+.bg-ilga-white { background-color: var(--ilga-white); }
+
+/* 3. Criando as classes de Texto */
+.text-ilga-red { color: var(--ilga-red); }
+.text-ilga-orange { color: var(--ilga-orange); }
+.text-ilga-yellow { color: var(--ilga-yellow); }
+.text-ilga-green { color: var(--ilga-green); }
+.text-ilga-blue { color: var(--ilga-blue); }
+.text-ilga-purple { color: var(--ilga-purple); }
+.text-ilga-black { color: var(--ilga-black); }
+.text-ilga-white { color: var(--ilga-white); }
+
+/* 4. Criando as classes de Bordas (usadas nos avatares e barras) */
+.border-ilga-white { border-color: var(--ilga-white); }
