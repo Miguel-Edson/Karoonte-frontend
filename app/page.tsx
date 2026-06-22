@@ -1,26 +1,28 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import mqtt from "mqtt";
 
 export default function Home() {
   const [dispositivos, setDispositivos] = useState<{ id: string }[]>([]);
+  const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    // Conecta ao Broker (usando WSS para navegadores)
+    // Conecta ao Broker
     const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+    setMqttClient(client);
 
     client.on("connect", () => {
       console.log("Conectado ao Lobby!");
-      // Assina o tópico de dispositivos (exemplo de tópico que o servidor pode publicar)
       client.subscribe("karoonte/lobby/dispositivos");
     });
 
     client.on("message", (topic, message) => {
       if (topic === "karoonte/lobby/dispositivos") {
         const lista = JSON.parse(message.toString());
-        setDispositivos(lista); // O servidor envia a lista completa [{id: "aladdin"}, ...]
+        setDispositivos(lista); 
       }
     });
 
@@ -28,6 +30,21 @@ export default function Home() {
       client.end();
     };
   }, []);
+
+  // Nova função que comanda o Servidor a iniciar a partida!
+  const handleIniciarJogo = (e: React.MouseEvent) => {
+    e.preventDefault(); // Evita que o link mude de página sozinho
+    
+    if (dispositivos.length > 0 && mqttClient) {
+      console.log("Disparando comando de INICIAR_PARTIDA...");
+      
+      // Manda o sinal para o Orquestrador (Node.js) e pro ESP32
+      mqttClient.publish("karoonte/servidor/controle_web", JSON.stringify({ acao: "INICIAR_PARTIDA" }));
+      
+      // Vai para a tela da Pergunta
+      router.push("/question");
+    }
+  };
 
   return (
     <main className="min-h-screen bg-ilga-purple flex flex-col items-center justify-between p-8 py-8">
@@ -48,18 +65,18 @@ export default function Home() {
           </ul>
         </div>
 
-        {/* Só libera o botão quando houver pelo menos 1 jogador */}
-        <Link 
-          href="/question" 
+        {/* Botão agora executa a função de disparar o MQTT */}
+        <button 
+          onClick={handleIniciarJogo}
+          disabled={dispositivos.length === 0}
           className={`px-12 py-3 rounded-xl font-bold text-2xl transition-all shadow-md mt-8 ${
             dispositivos.length > 0 
-              ? "bg-ilga-purple text-white hover:brightness-110 hover:scale-105" 
+              ? "bg-ilga-purple text-white hover:brightness-110 hover:scale-105 cursor-pointer" 
               : "bg-gray-300 text-gray-500 cursor-not-allowed"
           }`}
-          onClick={(e) => dispositivos.length === 0 && e.preventDefault()}
         >
           Iniciar
-        </Link>
+        </button>
       </div>
 
       <Image src="/assets/mãos.svg" alt="Imagem de base" width={500} height={100} />
