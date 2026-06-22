@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 
 :root {
   --background: #ffffff;
@@ -23,4 +27,15 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+:root {
+  /* Cores da paleta Ilga World */
+  --color-red: 237, 41, 41;
+  --color-orange: 247, 107, 28;
+  --color-yellow: 255, 187, 80;
+  --color-green: 34, 184, 43;
+  --color-blue: 0, 142, 240;
+  --color-purple: 112, 60, 238;
+  --color-black: 33, 33, 33;
+  --color-white: 255, 255, 255;
 }
