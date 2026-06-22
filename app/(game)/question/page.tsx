@@ -1,19 +1,27 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation"; // 1. NOVO: Importamos o roteador automático do Next
+import { useRouter } from "next/navigation";
+import mqtt from "mqtt";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { OptionButton } from "@/components/ui/Button";
 import { greekMythologyQuestions, Question } from "@/lib/questions";
 
 export default function QuestionScreen() {
-  const router = useRouter(); // Inicializa o roteador
+  const router = useRouter();
   const [gameQuestions, setGameQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showGabarito, setShowGabarito] = useState(false);
   const [progress, setProgress] = useState(100);
-  const [isCorrect, setIsCorrect] = useState(false);
-  const [score, setScore] = useState(0);
-  const [isTimeOut, setIsTimeOut] = useState(false); // 2. NOVO: Para saber se o tempo esgotou ou se o jogador clicou
+  const [isTimeOut, setIsTimeOut] = useState(false);
+  
+  const [respostasJogadores, setRespostasJogadores] = useState<Record<string, number>>({});
+  const [scores, setScores] = useState<Record<string, number>>({});
+  
+  const TOTAL_JOGADORES = 2; 
+  
+  // Identificador para o jogador que está clicando na tela do navegador
+  const JOGADOR_WEB_ID = "WEB_1";
+  const webJaRespondeu = respostasJogadores[JOGADOR_WEB_ID] !== undefined;
 
   useEffect(() => {
     const perguntasSorteadas = [...greekMythologyQuestions]
@@ -22,11 +30,44 @@ export default function QuestionScreen() {
     setGameQuestions(perguntasSorteadas);
   }, []);
 
-  // 3. NOVO: Cronômetro Inteligente (15s para Pergunta, 5s para Gabarito)
+  useEffect(() => {
+    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+
+    client.on("connect", () => {
+      console.log("Conectado ao jogo!");
+      client.subscribe("karoonte/game/resposta");
+    });
+
+    client.on("message", (topic, message) => {
+      if (topic === "karoonte/game/resposta" && !showGabarito) {
+        try {
+          const data = JSON.parse(message.toString());
+          setRespostasJogadores((prev) => {
+            // Se este ESP já respondeu nesta rodada, ignora qualquer outro clique dele!
+            if (prev[data.id] !== undefined) return prev; 
+            return { ...prev, [data.id]: data.resposta };
+          });
+        } catch (error) {
+          console.error("Erro ao ler MQTT:", error);
+        }
+      }
+    });
+
+    return () => {
+      client.end();
+    };
+  }, [showGabarito]);
+
+  useEffect(() => {
+    const totalRespostas = Object.keys(respostasJogadores).length;
+    if (totalRespostas >= TOTAL_JOGADORES && !showGabarito) {
+      finalizarRodada(false); 
+    }
+  }, [respostasJogadores, showGabarito]);
+
   useEffect(() => {
     if (gameQuestions.length === 0) return;
 
-    // Se estiver no gabarito, o tempo é 5s. Se estiver na pergunta, é 15s.
     const tempoAtualEmSegundos = showGabarito ? 5 : 15;
     const intervaloEmMs = 100;
     const passo = 100 / ((tempoAtualEmSegundos * 1000) / intervaloEmMs);
@@ -41,46 +82,51 @@ export default function QuestionScreen() {
     return () => clearInterval(timer);
   }, [showGabarito, currentQuestionIndex, gameQuestions.length]);
 
-  // 4. NOVO: O que fazer quando a barra de progresso chega a 0%
   useEffect(() => {
     if (progress <= 0 && gameQuestions.length > 0) {
       if (!showGabarito) {
-        // Caso A: Acabou o tempo de responder a pergunta (15s)
-        setIsTimeOut(true);
-        setIsCorrect(false);
-        setProgress(100); // Enche a barra novamente para o cronômetro do Gabarito
-        setShowGabarito(true);
+        finalizarRodada(true);
       } else {
-        // Caso B: Acabou o tempo de visualização do Gabarito (5s)
         if (currentQuestionIndex < gameQuestions.length - 1) {
-          // Passa para a próxima pergunta automaticamente
           setCurrentQuestionIndex((prev) => prev + 1);
-          setProgress(100); // Enche a barra para a nova pergunta
+          setProgress(100);
+          setRespostasJogadores({}); 
           setShowGabarito(false);
         } else {
-          // Era a última pergunta! Vai para o Ranking automaticamente
+          localStorage.setItem('karoonte_scores_multiplayer', JSON.stringify(scores));
           router.push("/results");
         }
       }
     }
-  }, [progress, showGabarito, currentQuestionIndex, gameQuestions.length, router]);
+  }, [progress, showGabarito, currentQuestionIndex, gameQuestions.length, router, scores]);
 
-  useEffect(() => {
-    localStorage.setItem('karoonte_score', score.toString());
-  }, [score]);
+  const finalizarRodada = (porTempoEsgotado: boolean) => {
+    const currentQuestion = gameQuestions[currentQuestionIndex];
+    const correta = currentQuestion.correctAnswerIndex;
+
+    setScores((prevScores) => {
+      const novosScores = { ...prevScores };
+      Object.entries(respostasJogadores).forEach(([idJogador, respostaEscolhida]) => {
+        if (respostaEscolhida === correta) {
+          novosScores[idJogador] = (novosScores[idJogador] || 0) + 2;
+        }
+      });
+      return novosScores;
+    });
+
+    setIsTimeOut(porTempoEsgotado);
+    setProgress(100); 
+    setShowGabarito(true);
+  };
 
   const handleOptionClick = (selectedIndex: number) => {
-    if (showGabarito) return;
-
-    const currentQuestion = gameQuestions[currentQuestionIndex];
-    const acertou = selectedIndex === currentQuestion.correctAnswerIndex;
-
-    if (acertou) setScore((prev) => prev + 2);
-
-    setIsTimeOut(false); // Clicou antes do tempo acabar
-    setIsCorrect(acertou);
-    setProgress(100); // 5. NOVO: Enche a barra para os 5 segundos do Gabarito
-    setShowGabarito(true);
+    // SE JÁ ESTIVER NO GABARITO OU SE O JOGADOR WEB JÁ RESPONDEU, BLOQUEIA O CLIQUE!
+    if (showGabarito || webJaRespondeu) return;
+    
+    setRespostasJogadores((prev) => {
+      if (prev[JOGADOR_WEB_ID] !== undefined) return prev;
+      return { ...prev, [JOGADOR_WEB_ID]: selectedIndex };
+    });
   };
 
   const IconTriangle = <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L22 20H2L12 2Z" /></svg>;
@@ -109,23 +155,35 @@ export default function QuestionScreen() {
     <div className="w-full flex flex-col items-center">
       <div className="w-full max-w-4xl mb-4 flex justify-between items-center gap-4 text-ilga-white font-bold">
         <span>Pergunta {currentQuestionIndex + 1}/{gameQuestions.length}</span>
+        <div className="flex-grow flex justify-center">
+          <span className="text-sm bg-black/20 px-4 py-1 rounded-full">
+            Respostas recebidas: {Object.keys(respostasJogadores).length} / {TOTAL_JOGADORES}
+          </span>
+        </div>
         <ProgressBar progress={progress} />
       </div>
 
       <div className="bg-ilga-white rounded-3xl p-6 md:p-10 w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col min-h-[400px]">
-
+        
         {showGabarito && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/10 backdrop-blur-sm transition-all duration-300">
-            <div className={`text-ilga-white w-[150%] md:w-[200%] py-6 md:py-8 -rotate-[8deg] flex justify-center shadow-2xl transform scale-105 ${isTimeOut ? 'bg-ilga-black' : (isCorrect ? 'bg-ilga-green' : 'bg-ilga-red')}`}>
-              <span className="text-4xl md:text-6xl font-black italic tracking-widest drop-shadow-xl">
-                {isTimeOut ? "TEMPO ESGOTADO!" : (isCorrect ? "CORRETO!" : "INCORRETO!")}
+            <div className={`text-ilga-white w-[150%] md:w-[200%] py-6 md:py-8 -rotate-[8deg] flex justify-center shadow-2xl transform scale-105 ${isTimeOut ? 'bg-ilga-black' : 'bg-ilga-green'}`}>
+              <span className="text-4xl md:text-6xl font-black italic tracking-widest drop-shadow-xl text-center">
+                {isTimeOut ? "TEMPO ESGOTADO!" : "GABARITO!"}
               </span>
             </div>
-
+            
             <span className="mt-16 bg-ilga-white text-ilga-black px-4 py-1 rounded-full font-bold text-sm shadow animate-pulse">
               Aguarde a próxima...
             </span>
           </div>
+        )}
+
+        {/* Aviso de "Aguardando" se o jogador web já clicou e está esperando o ESP */}
+        {!showGabarito && webJaRespondeu && (
+           <div className="absolute top-4 right-6 z-10 bg-ilga-yellow text-ilga-black text-xs font-bold px-3 py-1 rounded-full animate-pulse shadow">
+             Sua resposta foi registrada. Aguardando oponentes...
+           </div>
         )}
 
         <div className="flex-grow flex items-center justify-center mb-8 z-0">
@@ -134,19 +192,40 @@ export default function QuestionScreen() {
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 z-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 z-30 relative">
           {currentQuestion.options.map((optionText, index) => {
-            const isFaded = showGabarito && index !== currentQuestion.correctAnswerIndex;
+            
+            // LÓGICA DE FADE (Apagar os botões)
+            // 1. Se estiver no gabarito, apaga as respostas incorretas.
+            // 2. Se o jogador Web respondeu, apaga instantaneamente as opções que ele NÃO escolheu.
+            const isFaded = showGabarito 
+              ? index !== currentQuestion.correctAnswerIndex
+              : (webJaRespondeu && respostasJogadores[JOGADOR_WEB_ID] !== index);
+            
+            const jogadoresNestaOpcao = Object.entries(respostasJogadores)
+              .filter(([id, resposta]) => resposta === index)
+              .map(([id]) => id);
 
             return (
-              <OptionButton
-                key={index}
-                onClick={() => handleOptionClick(index)}
-                colorClass={buttonStyles[index].color}
-                icon={buttonStyles[index].icon}
-                text={optionText}
-                isFaded={isFaded}
-              />
+              <div key={index} className="relative w-full">
+                <OptionButton 
+                  onClick={() => handleOptionClick(index)} 
+                  colorClass={buttonStyles[index].color} 
+                  icon={buttonStyles[index].icon} 
+                  text={optionText} 
+                  isFaded={isFaded} 
+                />
+                
+                {showGabarito && jogadoresNestaOpcao.length > 0 && (
+                  <div className="absolute -top-3 -right-2 flex gap-1 z-40 opacity-100 animate-bounce">
+                    {jogadoresNestaOpcao.map((jogadorId, i) => (
+                      <div key={i} className="bg-ilga-black text-ilga-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg border-2 border-white transform scale-110">
+                        {jogadorId.substring(0, 5)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
